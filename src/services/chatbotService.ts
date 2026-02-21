@@ -56,8 +56,8 @@ const quantities = {
   Priority: { rice: 5, wheat: 5, kerosene: 3, sugar: 1 },
 };
 
-// Simple rule-based NLP for ration queries
-export const processQuery = (query: string, cardType: string): { answer: string; quota: RationQuota } => {
+// Simple rule-based NLP for ration queries (fallback)
+export const processQuery = async (query: string, cardType: string): Promise<{ answer: string; quota: RationQuota }> => {
   const q = query.toLowerCase();
   const isAAY = cardType === 'AAY';
   const qty = quantities[cardType as keyof typeof quantities];
@@ -80,10 +80,41 @@ export const processQuery = (query: string, cardType: string): { answer: string;
     lastUpdated: new Date().toISOString()
   };
 
+  // Try Ollama AI response
+  try {
+    const prompt = `You are RationSathi assistant. Answer ration queries using this data:
+Ration Data: ${JSON.stringify(rationData)}
+User Card Type: ${cardType}
+Quantities for ${cardType}: ${JSON.stringify(qty)}
+Prices: Rice ₹${ricePrice}/kg, Wheat ₹${wheatPrice}/kg, Kerosene ₹${kerosenePrice}/L, Sugar ₹${sugarPrice}/kg
+
+User Query: ${query}
+
+Provide a helpful, accurate response with calculations if needed. Include qualities, prices, totals, details, and benefits. Keep it concise.`;
+
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama2', // Change to your installed model, e.g., 'mistral'
+        prompt,
+        stream: false
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return { answer: data.response.trim(), quota };
+    }
+  } catch (error) {
+    console.error('Ollama not available, using fallback:', error);
+  }
+
+  // Fallback to rule-based
   // Check for specific item queries
   if (q.includes('rice') || q.includes('ari') || q.includes('chawal')) {
     const total = qty.rice * ricePrice;
-    if (q.includes('quality') || q.includes('type') || q.includes('details')) {
+    if (q.includes('quality') || q.includes('type') || q.includes('details') || q.includes('typoe')) {
       return {
         answer: `Rice details:\n• Qualities: ${rationData.rice.qualities.join(', ')}\n• Price: ₹${ricePrice}/kg\n• Your quota: ${qty.rice}kg\n• Total cost: ₹${total.toFixed(2)}\n• Details: ${rationData.rice.details}\n• Benefits: ${rationData.rice.benefits}`,
         quota,

@@ -44,7 +44,7 @@ const Chatbot = () => {
     speechSynthesis.speak(utterance);
   };
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -55,9 +55,8 @@ const Chatbot = () => {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
 
-    // Process with delay for natural feel
-    setTimeout(() => {
-      const { answer } = processQuery(text, profile?.cardType || 'BPL');
+    try {
+      const { answer } = await processQuery(text, profile?.cardType || 'BPL');
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         text: answer,
@@ -66,7 +65,16 @@ const Chatbot = () => {
       };
       setMessages((prev) => [...prev, botMsg]);
       speak(answer);
-    }, 500);
+    } catch (error) {
+      console.error('Error processing query:', error);
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: 'Sorry, I encountered an error. Please try again.',
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    }
   };
 
   const toggleVoice = () => {
@@ -87,10 +95,10 @@ const Chatbot = () => {
     recognition.interimResults = false;
     recognition.continuous = false;
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = async (event: any) => {
       const text = event.results[0][0].transcript;
       setInput(text);
-      sendMessage(text);
+      await sendMessage(text);
       setListening(false);
     };
 
